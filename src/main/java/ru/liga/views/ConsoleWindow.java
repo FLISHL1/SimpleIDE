@@ -1,6 +1,8 @@
 package ru.liga.views;
 
 
+import ru.liga.adapter.ConsoleWindowAdapter;
+
 import javax.swing.*;
 import java.awt.*;
 

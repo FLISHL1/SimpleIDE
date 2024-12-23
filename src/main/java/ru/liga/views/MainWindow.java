@@ -2,6 +2,7 @@ package ru.liga.views;
 
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rtextarea.RTextScrollPane;
+import ru.liga.adapter.MainWindowAdapter;
 import ru.liga.autoCompletion.AutoCompletion;
 import ru.liga.utils.ExtractorPublicClassName;
 import ru.liga.utils.StateManager;
@@ -21,6 +22,8 @@ public class MainWindow {
     private final ExtractorPublicClassName extractorClassName;
     private final StateManager stateManager;
     private ConsoleWindow consoleWindow;
+    private final int AUTO_SAVE_DELAY = 1000; // 5 секунд
+    private Timer autoSaveTimer; // Таймер для автосохранения
 
     public MainWindow() {
         mainFrame = new JFrame(title);
@@ -91,6 +94,7 @@ public class MainWindow {
         mainFrame.addWindowListener(new MainWindowAdapter(this));
 
         mainFrame.setVisible(true);
+        setupAutoSaveFeature();
     }
 
     private RSyntaxTextArea createTextArea() {
@@ -128,6 +132,38 @@ public class MainWindow {
         }
     }
 
+    private void setupAutoSaveFeature() {
+        autoSaveTimer = new Timer(AUTO_SAVE_DELAY, e -> saveFileAuto());
+        autoSaveTimer.setRepeats(false); // Таймер срабатывает только один раз
+        textArea.addKeyListener(new java.awt.event.KeyAdapter() {
+            @Override
+            public void keyPressed(java.awt.event.KeyEvent e) {
+                resetAutoSaveTimer();
+            }
+
+            @Override
+            public void keyReleased(java.awt.event.KeyEvent e) {
+                resetAutoSaveTimer();
+            }
+        });
+    }
+
+    private void resetAutoSaveTimer() {
+        if (autoSaveTimer.isRunning()) {
+            autoSaveTimer.restart(); // Перезапуск таймера
+        } else {
+            autoSaveTimer.start(); // Старт таймера
+        }
+    }
+
+    private void saveFileAuto() {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(stateManager.getLastFile()))) {
+            textArea.write(writer);
+            System.out.println("Автосохранение выполнено в файл");
+        } catch (IOException e) {
+            System.err.println("Ошибка автосохранения: " + e.getMessage());
+        }
+    }
 
     private void runJavaFile() {
         JTextArea consoleArea = (JTextArea) consoleScrollPane.getViewport().getView();

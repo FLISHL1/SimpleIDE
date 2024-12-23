@@ -1,4 +1,6 @@
-package ru.liga.views;
+package ru.liga.adapter;
+
+import ru.liga.views.MainWindow;
 
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;

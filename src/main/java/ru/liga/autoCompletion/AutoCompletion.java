@@ -11,10 +11,11 @@ import org.fife.ui.autocomplete.DefaultCompletionProvider;
 import org.fife.ui.autocomplete.FunctionCompletion;
 import org.fife.ui.autocomplete.VariableCompletion;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
-
+import javax.swing.event.CaretListener;
 import javax.swing.text.BadLocationException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,12 +27,18 @@ public class AutoCompletion {
 
     public AutoCompletion(RSyntaxTextArea textArea) {
         provider = new DefaultCompletionProvider();
+        textArea.addCaretListener(createCaretListener(textArea));
+        setupAutoComplete(textArea);
+    }
 
-        addDefaultKeywords(provider); // Добавляем ключевые слова
-        addJavaStandardLibraryCompletions(provider); // Добавляем базовые классы
+    private void setupAutoComplete(RSyntaxTextArea textArea) {
+        org.fife.ui.autocomplete.AutoCompletion ac = new org.fife.ui.autocomplete.AutoCompletion(provider);
+        ac.setShowDescWindow(true);
+        ac.install(textArea);
+    }
 
-        // Добавляем динамическую обработку текста
-        textArea.addCaretListener(e -> {
+    private CaretListener createCaretListener(RSyntaxTextArea textArea) {
+        return e -> {
             try {
                 int pos = textArea.getCaretPosition();
                 String textUpToCaret = textArea.getText(0, pos);
@@ -44,15 +51,11 @@ public class AutoCompletion {
             } catch (BadLocationException ex) {
                 ex.printStackTrace();
             }
-        });
-
-        org.fife.ui.autocomplete.AutoCompletion ac = new org.fife.ui.autocomplete.AutoCompletion(provider);
-        ac.setShowDescWindow(true);
-        ac.install(textArea);
+        };
     }
 
 
-    private void addDefaultKeywords(DefaultCompletionProvider provider) {
+/*    private void addDefaultKeywords(DefaultCompletionProvider provider) {
         String[] keywords = {
                 "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class",
                 "const", "continue", "default", "do", "double", "else", "enum", "extends", "final",
@@ -66,63 +69,28 @@ public class AutoCompletion {
             provider.addCompletion(new BasicCompletion(provider, keyword));
         }
     }
-
-    private void addJavaStandardLibraryCompletions(DefaultCompletionProvider provider) {
-        // Список стандартных классов Java, которые вы хотите добавить
-        Class<?>[] standardClasses = {
-                java.lang.System.class, java.lang.Math.class, java.lang.String.class, java.lang.Integer.class, java.util.ArrayList.class
-        };
-
-        for (Class<?> cls : standardClasses) {
-            // Добавляем имя класса
-            provider.addCompletion(new BasicCompletion(provider, cls.getSimpleName()));
-
-            // Добавляем методы класса
-            for (Method method : cls.getDeclaredMethods()) {
-                StringBuilder methodSignature = new StringBuilder(method.getName() + "(");
-                Class<?>[] params = method.getParameterTypes();
-                for (int i = 0; i < params.length; i++) {
-                    methodSignature.append(params[i].getSimpleName());
-                    if (i < params.length - 1) {
-                        methodSignature.append(", ");
-                    }
-                }
-                methodSignature.append(")");
-                provider.addCompletion(new BasicCompletion(provider, methodSignature.toString()));
-            }
-
-            // Добавляем поля класса
-            for (Field field : cls.getDeclaredFields()) {
-                provider.addCompletion(new BasicCompletion(provider, field.getName()));
-            }
-        }
-    }
+*/
 
     private String getLastWordBeforeDot(String text) {
         String regex = "\\b(\\w+)\\s*\\.$";
         Pattern pattern = Pattern.compile(regex);
         Matcher matcher = pattern.matcher(text);
         if (matcher.find()) {
-            return matcher.group(1); // Возвращает имя переменной перед точкой
+            return matcher.group(1);
         }
-        return null; // Если не найдено
+        return null;
     }
 
     private void addStaticCompletions(Class<?> cls) {
-        for (Method method : cls.getDeclaredMethods()) {
-            if (java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
-                addClassCompletionsWithDescriptions(method);
-            }
-        }
-
-        for (Field field : cls.getDeclaredFields()) {
-            if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
-                addFieldCompletionsWithDescriptions(field);
-            }
-        }
+        Arrays.stream(cls.getDeclaredMethods())
+                .filter(method -> java.lang.reflect.Modifier.isStatic(method.getModifiers()))
+                .forEach(this::addMethodCompletionsWithDescriptions);
+        Arrays.stream(cls.getDeclaredFields())
+                .filter(field -> java.lang.reflect.Modifier.isStatic(field.getModifiers()))
+                .forEach(this::addFieldCompletionsWithDescriptions);
     }
 
-    private void addClassCompletionsWithDescriptions(Method method) {
+    private void addMethodCompletionsWithDescriptions(Method method) {
         StringBuilder methodSignature = new StringBuilder(method.getName() + "(");
         Class<?>[] params = method.getParameterTypes();
         for (int i = 0; i < params.length; i++) {
@@ -133,10 +101,6 @@ public class AutoCompletion {
         }
         methodSignature.append(")");
 
-        // Создаем FunctionCompletion
-        FunctionCompletion completion = new FunctionCompletion(provider, methodSignature.toString(), method.getReturnType().getSimpleName());
-
-        // Описание
         StringBuilder description = new StringBuilder();
         description.append("<html><b>Method:</b> ").append(method.getName()).append("<br>");
         description.append("<b>Returns:</b> ").append(method.getReturnType().getSimpleName()).append("<br>");
@@ -151,33 +115,27 @@ public class AutoCompletion {
         }
         description.append("</html>");
 
-        // Устанавливаем описание
+        FunctionCompletion completion = new FunctionCompletion(provider, methodSignature.toString(), method.getReturnType().getSimpleName());
         completion.setShortDescription(description.toString());
         provider.addCompletion(completion);
 
     }
 
     private void addFieldCompletionsWithDescriptions(Field field) {
-        // Создаем VariableCompletion
         VariableCompletion completion = new VariableCompletion(provider, field.getName(), field.getType().getSimpleName());
-
-        // Описание
         String description = "<html><b>Field:</b> " + field.getName() + "<br>" +
                 "<b>Type:</b> " + field.getType().getSimpleName() + "</html>";
 
-        // Устанавливаем описание
         completion.setShortDescription(description);
         provider.addCompletion(completion);
     }
 
     private boolean isClassName(String context, CompilationUnit cu) {
-        // Проверяем среди импортов
         return cu.findAll(com.github.javaparser.ast.ImportDeclaration.class).stream()
                 .anyMatch(importDecl -> importDecl.getNameAsString().endsWith("." + context))
                 || isJavaLangClass(context);
     }
 
-    // Проверяем среди стандартных классов java.lang
     private boolean isJavaLangClass(String context) {
         try {
             Class.forName("java.lang." + context);
@@ -188,47 +146,40 @@ public class AutoCompletion {
     }
 
     private void updateCompletionsForContext(String context, String fullText) {
-        provider.clear(); // Очищаем старые подсказки
-
         try {
-            // Анализируем код с использованием JavaParser
+            provider.clear();
             JavaParser parser = new JavaParser();
             ParseResult<CompilationUnit> parseResult = parser.parse(fullText);
             CompilationUnit cu = parseResult.getResult().get();
 
             Map<String, ClassOrInterfaceDeclaration> userDefinedClasses = new HashMap<>();
-            cu.findAll(ClassOrInterfaceDeclaration.class).forEach(cls -> {
-                userDefinedClasses.put(cls.getNameAsString(), cls);
-            });
+            cu.findAll(ClassOrInterfaceDeclaration.class)
+                    .forEach(cls -> userDefinedClasses.put(cls.getNameAsString(), cls));
 
-            // Проверяем, является ли контекст классом
             if (isClassName(context, cu)) {
                 try {
-                    Class<?> cls = Class.forName("java.lang." + context); // Пробуем java.lang
+                    Class<?> cls = Class.forName("java.lang." + context);
                     addStaticCompletions(cls);
                 } catch (ClassNotFoundException e) {
                     System.err.println("Класс не найден для статических подсказок: " + context);
                 }
             } else {
-                // Поиск переменной и её типа
-                cu.findAll(VariableDeclarator.class).forEach(variable -> {
-                    if (variable.getNameAsString().equals(context)) {
+                cu.findAll(VariableDeclarator.class)
+                        .stream()
+                        .filter(variable -> variable.getNameAsString().equals(context))
+                        .forEach(variable -> {
                         String typeName = variable.getTypeAsString();
-
                         if (userDefinedClasses.containsKey(typeName)) {
                             addUserDefinedClassCompletions(userDefinedClasses.get(typeName));
                         } else {
                             try {
                                 Class<?> cls = Class.forName(typeName.startsWith("java.lang.") ? typeName : "java.lang." + typeName);
-                                addClassCompletions(cls); // Добавляем методы и поля переменной
+                                addClassCompletions(cls);
                             } catch (ClassNotFoundException e) {
                                 System.err.println("Класс не найден для контекста: " + typeName);
                             }
                         }
-                    }
                 });
-
-                // Обрабатываем пользовательские вложенные классы
                 addNestedClassCompletions(context, cu);
             }
 
@@ -239,47 +190,28 @@ public class AutoCompletion {
 
     private void addNestedClassCompletions(String context, CompilationUnit cu) {
         List<ClassOrInterfaceDeclaration> nestedClasses = cu.findAll(ClassOrInterfaceDeclaration.class);
-
-        for (ClassOrInterfaceDeclaration nestedClass : nestedClasses) {
-            if (nestedClass.getNameAsString().equals(context)) {
-                // Добавляем методы вложенного класса
-                nestedClass.findAll(MethodDeclaration.class).forEach(method -> {
-
-                    provider.addCompletion(new BasicCompletion(provider, method.getNameAsString() + "()"));
+        nestedClasses.stream()
+                .filter(nestedClass -> nestedClass.getNameAsString().equals(context))
+                .forEach(nestedClass -> {
+                    nestedClass
+                            .findAll(MethodDeclaration.class)
+                            .forEach(method -> provider.addCompletion(new BasicCompletion(provider, method.getNameAsString() + "()")));
+                    nestedClass.getFields()
+                            .forEach(field -> field.getVariables()
+                                    .forEach(variable -> provider.addCompletion(new BasicCompletion(provider, variable.getNameAsString()))));
                 });
-
-                // Добавляем поля вложенного класса
-                nestedClass.getFields().forEach(field -> {
-                    field.getVariables().forEach(variable -> {
-                        provider.addCompletion(new BasicCompletion(provider, variable.getNameAsString()));
-                    });
-                });
-            }
-        }
     }
 
     private void addUserDefinedClassCompletions(ClassOrInterfaceDeclaration userClass) {
-        // Добавляем методы пользовательского класса
-        userClass.findAll(MethodDeclaration.class).forEach(method -> {
-
-            provider.addCompletion(new BasicCompletion(provider, method.getNameAsString() + "()"));
-        });
-
-        // Добавляем поля пользовательского класса
-        userClass.getFields().forEach(field -> {
-            field.getVariables().forEach(variable -> {
-                provider.addCompletion(new BasicCompletion(provider, variable.getNameAsString()));
-            });
-        });
+        userClass.findAll(MethodDeclaration.class)
+                .forEach(method -> provider.addCompletion(new BasicCompletion(provider, method.getNameAsString() + "()")));
+        userClass.getFields()
+                .forEach(field -> field.getVariables()
+                        .forEach(variable -> provider.addCompletion(new BasicCompletion(provider, variable.getNameAsString()))));
     }
 
     private void addClassCompletions(Class<?> cls) {
-        for (Method method : cls.getMethods()) {
-            addClassCompletionsWithDescriptions(method);
-        }
-
-        for (Field field : cls.getFields()) { // Получаем публичные поля
-            addFieldCompletionsWithDescriptions(field);
-        }
+        Arrays.stream(cls.getMethods()).forEach(this::addMethodCompletionsWithDescriptions);
+        Arrays.stream(cls.getFields()).forEach(this::addFieldCompletionsWithDescriptions);
     }
 }

@@ -3,7 +3,9 @@ public class Main{
 		String a = "asd";
 		Integer b = 1;
 		int c = 0;
-		System.out.print(a + b + a + t.hello());
+		
+		
+		System.out.print(a + b + a + Test.hello());
 	}
 	public static class Test{
 		public static String hello(){

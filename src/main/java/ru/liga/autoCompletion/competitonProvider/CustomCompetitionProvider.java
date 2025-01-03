@@ -1,4 +1,4 @@
-package ru.liga.competitonProvider;
+package ru.liga.autoCompletion.competitonProvider;
 
 import org.fife.ui.autocomplete.DefaultCompletionProvider;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;

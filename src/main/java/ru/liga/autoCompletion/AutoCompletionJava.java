@@ -9,7 +9,7 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import org.fife.rsta.ac.java.JavaLanguageSupport;
 import org.fife.ui.autocomplete.*;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
-import ru.liga.competitonProvider.CustomCompetitionProvider;
+import ru.liga.autoCompletion.competitonProvider.CustomCompetitionProvider;
 
 import javax.swing.event.CaretListener;
 import java.lang.reflect.Field;
@@ -18,17 +18,22 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class AutoCompletionJava {
+    private final JavaParser javaParser;
     private final CustomCompetitionProvider provider;
+    private final ExecutorService executorService;
 
-    public AutoCompletionJava(RSyntaxTextArea textArea) {
-        provider = new CustomCompetitionProvider();
+    public AutoCompletionJava(JavaParser javaParser, CustomCompetitionProvider provider, RSyntaxTextArea textArea) {
+        this.provider = provider;
+        this.javaParser = javaParser;
+        executorService = Executors.newSingleThreadExecutor();
         textArea.addCaretListener(createCaretListener(textArea));
         setupAutoComplete(textArea);
-
     }
 
     private void setupAutoComplete(RSyntaxTextArea textArea) {
@@ -41,28 +46,33 @@ public class AutoCompletionJava {
 
     private CaretListener createCaretListener(RSyntaxTextArea textArea) {
         return e -> {
-            if (!provider.getAlreadyEnteredText(textArea).contains(".")) {
-                provider.clear();
-                addDefaultKeywords(provider);
-            } else {
-                String context = getLastWordBeforeDot(provider.getAlreadyEnteredText(textArea));
-
-                if (context != null) {
-                    updateCompletionsForContext(context, textArea.getText());
-
-                }
-            }
+            executorService.execute(() -> updateProvider(textArea));
         };
+    }
+
+    private void updateProvider(RSyntaxTextArea textArea) {
+        if (!provider.getAlreadyEnteredText(textArea).contains(".")) {
+            provider.clear();
+            addDefaultKeywords(provider);
+
+        } else {
+            String context = getLastWordBeforeDot(provider.getAlreadyEnteredText(textArea));
+
+            if (context != null) {
+                updateCompletionsForContext(context, textArea.getText());
+
+            }
+        }
     }
 
 
     private void addDefaultKeywords(DefaultCompletionProvider provider) {
         String[] keywords = {
-                "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class",
-                "const", "continue", "default", "do", "double", "else", "enum", "extends", "final",
-                "finally", "float", "for", "goto", "if", "implements", "import", "instanceof",
-                "int", "interface", "long", "native", "new", "null", "package", "private", "protected",
-                "public", "return", "short", "static", "strictfp", "super", "switch", "synchronized",
+                "abstract", "assert", "break", "case", "catch", "class",
+                "const", "continue", "default", "do", "else", "enum", "extends", "final",
+                "finally", "for", "goto", "if", "implements", "import", "instanceof",
+                "interface", "new", "null", "package", "private", "protected",
+                "public", "return", "static", "super", "switch", "synchronized",
                 "this", "throw", "throws", "transient", "try", "void", "volatile", "while"
         };
 
@@ -147,8 +157,7 @@ public class AutoCompletionJava {
     private void updateCompletionsForContext(String context, String fullText) {
         try {
             provider.clear();
-            JavaParser parser = new JavaParser();
-            ParseResult<CompilationUnit> parseResult = parser.parse(fullText);
+            ParseResult<CompilationUnit> parseResult = javaParser.parse(fullText);
             CompilationUnit cu = parseResult.getResult().get();
             System.out.println(context);
             Map<String, ClassOrInterfaceDeclaration> userDefinedClasses = new HashMap<>();

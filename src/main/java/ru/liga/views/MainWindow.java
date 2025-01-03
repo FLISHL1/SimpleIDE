@@ -1,14 +1,18 @@
 package ru.liga.views;
 
+import com.github.javaparser.JavaParser;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rtextarea.RTextScrollPane;
 import ru.liga.adapter.MainWindowAdapter;
 import ru.liga.autoCompletion.AutoCompletionJava;
+import ru.liga.autoCompletion.competitonProvider.CustomCompetitionProvider;
 import ru.liga.utils.AutoSaverLastOpenFileUtil;
 import ru.liga.utils.ExtractorPublicClassName;
 import ru.liga.utils.StateManager;
+import ru.liga.utils.fileFilter.JavaFileFilter;
 
 import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.io.*;
 
@@ -42,17 +46,15 @@ public class MainWindow {
         JButton saveButton = new JButton("Save");
         JButton runButton = new JButton("Run");
         JButton consoleButton = new JButton("Show Console");
-
         addComponentToPanel(topPanel, newButton, openButton, saveButton, runButton, consoleButton);
         mainFrame.add(topPanel, BorderLayout.NORTH);
-
         textArea = createTextArea();
-        autoCompletionJava = new AutoCompletionJava(textArea);
+
+        autoCompletionJava = new AutoCompletionJava(new JavaParser(), new CustomCompetitionProvider(), textArea);
         RTextScrollPane sp = new RTextScrollPane(textArea);
         mainFrame.add(sp, BorderLayout.CENTER);
 
         JTextArea consoleArea = new JTextArea();
-
         consoleArea.setEditable(false);
         consoleScrollPane = new JScrollPane(consoleArea);
         consoleScrollPane.setPreferredSize(new Dimension(WIDTH, 150));
@@ -67,10 +69,9 @@ public class MainWindow {
         fontSizeSlider.setPaintTicks(true);
         fontSizeSlider.setPaintLabels(true);
         addComponentToPanel(rightPanel, fontSizeLabel, fontSizeSlider);
-
         mainFrame.add(rightPanel, BorderLayout.EAST);
 
-        newButton.addActionListener(e -> textArea.setText(""));
+        newButton.addActionListener(e -> clearTextArea());
         openButton.addActionListener(e -> openFile());
         saveButton.addActionListener(e -> saveFile());
         runButton.addActionListener(e -> runJavaFile());
@@ -88,6 +89,11 @@ public class MainWindow {
         mainFrame.setVisible(true);
     }
 
+    private void clearTextArea() {
+        textArea.setText("");
+        stateManager.saveLastOpenedFile("");
+    }
+
     private void addComponentToPanel(JPanel panel, JComponent... buttons) {
         for (JComponent button : buttons) {
             panel.add(button);
@@ -95,8 +101,7 @@ public class MainWindow {
     }
 
     private RSyntaxTextArea createTextArea() {
-        final RSyntaxTextArea textArea;
-        textArea = new RSyntaxTextArea(20, 60);
+        RSyntaxTextArea textArea = new RSyntaxTextArea(20, 60);
         textArea.setSyntaxEditingStyle(RSyntaxTextArea.SYNTAX_STYLE_JAVA);
         textArea.setCodeFoldingEnabled(true);
         return textArea;
@@ -104,6 +109,7 @@ public class MainWindow {
 
     private void openFile() {
         JFileChooser fileChooser = new JFileChooser();
+        fileChooser.addChoosableFileFilter(new FileNameExtensionFilter("Java File", "java"));
         int result = fileChooser.showOpenDialog(null);
         if (result == JFileChooser.APPROVE_OPTION) {
             File file = fileChooser.getSelectedFile();
@@ -118,6 +124,8 @@ public class MainWindow {
 
     private void saveFile() {
         JFileChooser fileChooser = new JFileChooser();
+        fileChooser.addChoosableFileFilter(new JavaFileFilter());
+        fileChooser.setSelectedFile(new File(extractorClassName.extractClassName(textArea.getText()) + ".java"));
         int result = fileChooser.showSaveDialog(null);
         if (result == JFileChooser.APPROVE_OPTION) {
             File file = fileChooser.getSelectedFile();

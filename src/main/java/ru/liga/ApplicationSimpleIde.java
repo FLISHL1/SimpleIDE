@@ -9,10 +9,11 @@ import javax.swing.*;
 
 public class ApplicationSimpleIde {
     public static void main(String[] args) {
+        StateManager stateManager = new StateManager();
         SwingUtilities.invokeLater(() -> new MainWindow(
-                new StateManager(),
+                stateManager,
                 new ExtractorPublicClassName(),
-                new AutoSaverLastOpenFileUtil(new StateManager())
+                new AutoSaverLastOpenFileUtil(stateManager)
         ));
     }
 }

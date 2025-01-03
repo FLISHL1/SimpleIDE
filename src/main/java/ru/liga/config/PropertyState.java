@@ -8,10 +8,14 @@ import java.util.Properties;
 
 public class PropertyState {
     private final String CONFIG_FILE = "states.properties";
-    private final Properties PROPERTIES;
+    private Properties PROPERTIES;
     private final String PATH_TO_FILE = "src/main/resources/";
 
     public PropertyState() {
+        PROPERTIES = updateProperties();
+    }
+
+    public Properties updateProperties() {
         try (FileInputStream fileInputStream = new FileInputStream(PATH_TO_FILE + CONFIG_FILE)) {
             PROPERTIES = new Properties();
             PROPERTIES.load(fileInputStream);
@@ -20,6 +24,7 @@ public class PropertyState {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        return PROPERTIES;
     }
 
     public void setStore(String comment){

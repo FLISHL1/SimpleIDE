@@ -12,11 +12,13 @@ public class StateManager {
     public void saveLastOpenedFile(String filePath) {
         propertyState.setProperty("lastFile", filePath);
         propertyState.setStore("Application State");
+        propertyState.updateProperties();
     }
     public void saveAppState(Integer fontSize) {
         propertyState.setProperty("fontSize", String.valueOf(fontSize));
 
         propertyState.setStore("Application State");
+        propertyState.updateProperties();
     }
 
     public String getFontSize(){

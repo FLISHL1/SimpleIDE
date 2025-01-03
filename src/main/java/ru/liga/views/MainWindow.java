@@ -3,7 +3,7 @@ package ru.liga.views;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rtextarea.RTextScrollPane;
 import ru.liga.adapter.MainWindowAdapter;
-import ru.liga.autoCompletion.AutoCompletion;
+import ru.liga.autoCompletion.AutoCompletionJava;
 import ru.liga.utils.AutoSaverLastOpenFileUtil;
 import ru.liga.utils.ExtractorPublicClassName;
 import ru.liga.utils.StateManager;
@@ -19,7 +19,7 @@ public class MainWindow {
     private final String title = "Simple Java IDE";
     private final RSyntaxTextArea textArea;
     private final JSlider fontSizeSlider;
-    private final AutoCompletion autoCompletion;
+    private final AutoCompletionJava autoCompletionJava;
     private final JScrollPane consoleScrollPane;
     private final JFrame mainFrame;
     private final ExtractorPublicClassName extractorClassName;
@@ -34,17 +34,7 @@ public class MainWindow {
         mainFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         mainFrame.setSize(WIDTH, HEIGHT);
         mainFrame.setLayout(new BorderLayout());
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch (ClassNotFoundException e) {
-            throw new RuntimeException(e);
-        } catch (InstantiationException e) {
-            throw new RuntimeException(e);
-        } catch (IllegalAccessException e) {
-            throw new RuntimeException(e);
-        } catch (UnsupportedLookAndFeelException e) {
-            throw new RuntimeException(e);
-        }
+
         // Верхняя панель с кнопками
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton newButton = new JButton("New");
@@ -53,15 +43,11 @@ public class MainWindow {
         JButton runButton = new JButton("Run");
         JButton consoleButton = new JButton("Show Console");
 
-        topPanel.add(newButton);
-        topPanel.add(openButton);
-        topPanel.add(saveButton);
-        topPanel.add(runButton);
-        topPanel.add(consoleButton);
+        addComponentToPanel(topPanel, newButton, openButton, saveButton, runButton, consoleButton);
         mainFrame.add(topPanel, BorderLayout.NORTH);
 
         textArea = createTextArea();
-        autoCompletion = new AutoCompletion(textArea);
+        autoCompletionJava = new AutoCompletionJava(textArea);
         RTextScrollPane sp = new RTextScrollPane(textArea);
         mainFrame.add(sp, BorderLayout.CENTER);
 
@@ -80,9 +66,7 @@ public class MainWindow {
         fontSizeSlider.setMajorTickSpacing(5);
         fontSizeSlider.setPaintTicks(true);
         fontSizeSlider.setPaintLabels(true);
-
-        rightPanel.add(fontSizeLabel);
-        rightPanel.add(fontSizeSlider);
+        addComponentToPanel(rightPanel, fontSizeLabel, fontSizeSlider);
 
         mainFrame.add(rightPanel, BorderLayout.EAST);
 
@@ -102,6 +86,12 @@ public class MainWindow {
         mainFrame.addWindowListener(new MainWindowAdapter(this));
         autoSaverLastOpenFileUtil.setupAutoSaveFeature(textArea);
         mainFrame.setVisible(true);
+    }
+
+    private void addComponentToPanel(JPanel panel, JComponent... buttons) {
+        for (JComponent button : buttons) {
+            panel.add(button);
+        }
     }
 
     private RSyntaxTextArea createTextArea() {

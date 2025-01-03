@@ -6,13 +6,12 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
-import org.fife.ui.autocomplete.BasicCompletion;
-import org.fife.ui.autocomplete.DefaultCompletionProvider;
-import org.fife.ui.autocomplete.FunctionCompletion;
-import org.fife.ui.autocomplete.VariableCompletion;
+import org.fife.rsta.ac.java.JavaLanguageSupport;
+import org.fife.ui.autocomplete.*;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import ru.liga.competitonProvider.CustomCompetitionProvider;
+
 import javax.swing.event.CaretListener;
-import javax.swing.text.BadLocationException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -22,40 +21,42 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class AutoCompletion {
-    private final DefaultCompletionProvider provider;
+public class AutoCompletionJava {
+    private final CustomCompetitionProvider provider;
 
-    public AutoCompletion(RSyntaxTextArea textArea) {
-        provider = new DefaultCompletionProvider();
+    public AutoCompletionJava(RSyntaxTextArea textArea) {
+        provider = new CustomCompetitionProvider();
         textArea.addCaretListener(createCaretListener(textArea));
         setupAutoComplete(textArea);
+
     }
 
     private void setupAutoComplete(RSyntaxTextArea textArea) {
-        org.fife.ui.autocomplete.AutoCompletion ac = new org.fife.ui.autocomplete.AutoCompletion(provider);
+        AutoCompletion ac = new AutoCompletion(provider);
+        new JavaLanguageSupport().install(textArea);
+        ac.setAutoActivationEnabled(true);
         ac.setShowDescWindow(true);
         ac.install(textArea);
     }
 
     private CaretListener createCaretListener(RSyntaxTextArea textArea) {
         return e -> {
-            try {
-                int pos = textArea.getCaretPosition();
-                String textUpToCaret = textArea.getText(0, pos);
+            if (!provider.getAlreadyEnteredText(textArea).contains(".")) {
+                provider.clear();
+                addDefaultKeywords(provider);
+            } else {
+                String context = getLastWordBeforeDot(provider.getAlreadyEnteredText(textArea));
 
-                String context = getLastWordBeforeDot(textUpToCaret);
                 if (context != null) {
-                    System.out.println(context);
                     updateCompletionsForContext(context, textArea.getText());
+
                 }
-            } catch (BadLocationException ex) {
-                ex.printStackTrace();
             }
         };
     }
 
 
-/*    private void addDefaultKeywords(DefaultCompletionProvider provider) {
+    private void addDefaultKeywords(DefaultCompletionProvider provider) {
         String[] keywords = {
                 "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class",
                 "const", "continue", "default", "do", "double", "else", "enum", "extends", "final",
@@ -65,16 +66,14 @@ public class AutoCompletion {
                 "this", "throw", "throws", "transient", "try", "void", "volatile", "while"
         };
 
-        for (String keyword : keywords) {
-            provider.addCompletion(new BasicCompletion(provider, keyword));
-        }
+        Arrays.stream(keywords).forEach(keyword -> provider.addCompletion(new BasicCompletion(provider, keyword)));
     }
-*/
 
     private String getLastWordBeforeDot(String text) {
-        String regex = "\\b(\\w+)\\s*\\.$";
+        String regex = "^\\s*(\\w*\\.?+\\w+\\s*)\\.$";
         Pattern pattern = Pattern.compile(regex);
         Matcher matcher = pattern.matcher(text);
+
         if (matcher.find()) {
             return matcher.group(1);
         }
@@ -151,7 +150,7 @@ public class AutoCompletion {
             JavaParser parser = new JavaParser();
             ParseResult<CompilationUnit> parseResult = parser.parse(fullText);
             CompilationUnit cu = parseResult.getResult().get();
-
+            System.out.println(context);
             Map<String, ClassOrInterfaceDeclaration> userDefinedClasses = new HashMap<>();
             cu.findAll(ClassOrInterfaceDeclaration.class)
                     .forEach(cls -> userDefinedClasses.put(cls.getNameAsString(), cls));

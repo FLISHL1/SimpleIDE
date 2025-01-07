@@ -3,6 +3,7 @@ package ru.liga.autoCompletion;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParseResult;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
@@ -11,32 +12,34 @@ import org.fife.ui.autocomplete.*;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import ru.liga.autoCompletion.competitonProvider.CustomCompetitionProvider;
 
-import javax.swing.event.CaretListener;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class AutoCompletionJava {
+public class AutoCompletionJava extends Thread {
     private final JavaParser javaParser;
     private final CustomCompetitionProvider provider;
-    private final ExecutorService executorService;
+    private final RSyntaxTextArea textArea;
 
     public AutoCompletionJava(JavaParser javaParser, CustomCompetitionProvider provider, RSyntaxTextArea textArea) {
         this.provider = provider;
         this.javaParser = javaParser;
-        executorService = Executors.newSingleThreadExecutor();
-        textArea.addCaretListener(createCaretListener(textArea));
-        setupAutoComplete(textArea);
+        this.textArea = textArea;
     }
 
-    private void setupAutoComplete(RSyntaxTextArea textArea) {
+    @Override
+    public void run() {
+        textArea.addCaretListener(e -> updateProvider());
+        setupAutoComplete();
+    }
+
+
+    private void setupAutoComplete() {
         AutoCompletion ac = new AutoCompletion(provider);
         new JavaLanguageSupport().install(textArea);
         ac.setAutoActivationEnabled(true);
@@ -44,13 +47,7 @@ public class AutoCompletionJava {
         ac.install(textArea);
     }
 
-    private CaretListener createCaretListener(RSyntaxTextArea textArea) {
-        return e -> {
-            executorService.execute(() -> updateProvider(textArea));
-        };
-    }
-
-    private void updateProvider(RSyntaxTextArea textArea) {
+    private void updateProvider() {
         if (!provider.getAlreadyEnteredText(textArea).contains(".")) {
             provider.clear();
             addDefaultKeywords(provider);
@@ -140,9 +137,20 @@ public class AutoCompletionJava {
     }
 
     private boolean isClassName(String context, CompilationUnit cu) {
-        return cu.findAll(com.github.javaparser.ast.ImportDeclaration.class).stream()
-                .anyMatch(importDecl -> importDecl.getNameAsString().endsWith("." + context))
+        return isImportJavaClassName(context, cu)
                 || isJavaLangClass(context);
+    }
+
+    private boolean isImportJavaClassName(String context, CompilationUnit cu) {
+        return cu.findAll(ImportDeclaration.class).stream()
+                .anyMatch(importDecl -> importDecl.getNameAsString().endsWith("." + context));
+    }
+
+    private String getImportJavaClassName(String context, CompilationUnit cu) {
+        return cu.findAll(ImportDeclaration.class).stream()
+                .filter(importDecl -> importDecl.getNameAsString().endsWith("." + context))
+                .findFirst()
+                .orElseThrow(ClassCastException::new).getNameAsString();
     }
 
     private boolean isJavaLangClass(String context) {
@@ -155,45 +163,57 @@ public class AutoCompletionJava {
     }
 
     private void updateCompletionsForContext(String context, String fullText) {
-        try {
-            provider.clear();
-            ParseResult<CompilationUnit> parseResult = javaParser.parse(fullText);
-            CompilationUnit cu = parseResult.getResult().get();
-            System.out.println(context);
-            Map<String, ClassOrInterfaceDeclaration> userDefinedClasses = new HashMap<>();
-            cu.findAll(ClassOrInterfaceDeclaration.class)
-                    .forEach(cls -> userDefinedClasses.put(cls.getNameAsString(), cls));
 
-            if (isClassName(context, cu)) {
-                try {
-                    Class<?> cls = Class.forName("java.lang." + context);
-                    addStaticCompletions(cls);
-                } catch (ClassNotFoundException e) {
-                    System.err.println("Класс не найден для статических подсказок: " + context);
+        provider.clear();
+        ParseResult<CompilationUnit> parseResult = javaParser.parse(fullText);
+        CompilationUnit cu = parseResult.getResult().get();
+        System.out.println(context);
+        Map<String, ClassOrInterfaceDeclaration> userDefinedClasses = new HashMap<>();
+        cu.findAll(ClassOrInterfaceDeclaration.class)
+                .forEach(cls -> userDefinedClasses.put(cls.getNameAsString(), cls));
+
+        if (isClassName(context, cu)) {
+            try {
+                Class<?> cls = Class.class;
+                if (isJavaLangClass(context)) {
+                    cls = Class.forName("java.lang." + context);
+                } else if (isImportJavaClassName(context, cu)) {
+                    cls = Class.forName(getImportJavaClassName(context, cu));
+                } else {
+                    throw new ClassNotFoundException();
                 }
-            } else {
-                cu.findAll(VariableDeclarator.class)
-                        .stream()
-                        .filter(variable -> variable.getNameAsString().equals(context))
-                        .forEach(variable -> {
+                addStaticCompletions(cls);
+            } catch (ClassNotFoundException e) {
+                System.err.println("Класс не найден для статических подсказок: " + context);
+            }
+        } else {
+            cu.findAll(VariableDeclarator.class)
+                    .stream()
+                    .filter(variable -> variable.getNameAsString().equals(context))
+                    .forEach(variable -> {
                         String typeName = variable.getTypeAsString();
                         if (userDefinedClasses.containsKey(typeName)) {
                             addUserDefinedClassCompletions(userDefinedClasses.get(typeName));
                         } else {
                             try {
-                                Class<?> cls = Class.forName(typeName.startsWith("java.lang.") ? typeName : "java.lang." + typeName);
+                                Class<?> cls = Class.class;
+                                if (isJavaLangClass(typeName)) {
+                                    cls = Class.forName("java.lang." + typeName);
+                                } else if (isImportJavaClassName(typeName, cu)) {
+                                    cls = Class.forName(getImportJavaClassName(typeName, cu));
+                                } else {
+                                    throw new ClassNotFoundException();
+                                }
                                 addClassCompletions(cls);
                             } catch (ClassNotFoundException e) {
                                 System.err.println("Класс не найден для контекста: " + typeName);
                             }
                         }
-                });
-                addNestedClassCompletions(context, cu);
-            }
-
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+                    });
+            addNestedClassCompletions(context, cu);
         }
+
+
     }
 
     private void addNestedClassCompletions(String context, CompilationUnit cu) {

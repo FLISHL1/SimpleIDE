@@ -1,15 +1,20 @@
-public class Main{
+import java.io.File;
+
+public class Main {
+	
 	public static void main(String... args){
 		String a = "asd";
 		Integer b = 1;
 		int c = 0;
-		
-		
-		System.out.print(a + b + a + Test.hello());
+		Test t = new Test();
+		System.out.print(a + b + a + t.hello());
 	}
 	public static class Test{
-		public static String hello(){
-			return "Hello World";
+		public String h = "Hellol=";
+		public String hello(){
+			return h + "World";
 		}
 	}
+	
 }
+

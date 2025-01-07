@@ -51,6 +51,7 @@ public class MainWindow {
         textArea = createTextArea();
 
         autoCompletionJava = new AutoCompletionJava(new JavaParser(), new CustomCompetitionProvider(), textArea);
+        autoCompletionJava.start();
         RTextScrollPane sp = new RTextScrollPane(textArea);
         mainFrame.add(sp, BorderLayout.CENTER);
 

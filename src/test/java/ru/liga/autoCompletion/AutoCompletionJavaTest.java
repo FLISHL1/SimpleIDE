@@ -20,7 +20,7 @@ class AutoCompletionJavaTest {
     void setUp() {
         textArea = new RSyntaxTextArea();
         provider = new CustomCompetitionProvider();
-        AutoCompletionJava autoCompletion = new AutoCompletionJava(new JavaParser(), provider, textArea);
+        AutoCompletionJava autoCompletion = new AutoCompletionJava(new JavaParser(), provider, textArea, new JavaClassChecker(), new ExtractorJavaClass(new JavaClassChecker()), new ExtractorDescription());
         autoCompletion.start();
     }
 

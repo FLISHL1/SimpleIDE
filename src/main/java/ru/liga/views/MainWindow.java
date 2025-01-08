@@ -5,6 +5,9 @@ import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rtextarea.RTextScrollPane;
 import ru.liga.adapter.MainWindowAdapter;
 import ru.liga.autoCompletion.AutoCompletionJava;
+import ru.liga.autoCompletion.ExtractorDescription;
+import ru.liga.autoCompletion.ExtractorJavaClass;
+import ru.liga.autoCompletion.JavaClassChecker;
 import ru.liga.autoCompletion.competitonProvider.CustomCompetitionProvider;
 import ru.liga.utils.AutoSaverLastOpenFileUtil;
 import ru.liga.utils.ExtractorPublicClassName;
@@ -12,7 +15,6 @@ import ru.liga.utils.StateManager;
 import ru.liga.utils.fileFilter.JavaFileFilter;
 
 import javax.swing.*;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.io.*;
 
@@ -29,18 +31,31 @@ public class MainWindow {
     private final ExtractorPublicClassName extractorClassName;
     private final StateManager stateManager;
     private final ConsoleWindow consoleWindow;
-
+    private final Font mainFont;
 
     public MainWindow(StateManager stateManager, ExtractorPublicClassName extractorClassName, AutoSaverLastOpenFileUtil autoSaverLastOpenFileUtil) {
         this.stateManager = stateManager;
         this.extractorClassName = extractorClassName;
+        this.mainFont = new Font(FAMILY_FONT, Font.PLAIN, 14);
+
         mainFrame = new JFrame(title);
         mainFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         mainFrame.setSize(WIDTH, HEIGHT);
         mainFrame.setLayout(new BorderLayout());
-
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        } catch (InstantiationException e) {
+            throw new RuntimeException(e);
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        } catch (UnsupportedLookAndFeelException e) {
+            throw new RuntimeException(e);
+        }
         // Верхняя панель с кнопками
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        topPanel.setFont(mainFont);
         JButton newButton = new JButton("New");
         JButton openButton = new JButton("Open");
         JButton saveButton = new JButton("Save");
@@ -50,15 +65,20 @@ public class MainWindow {
         mainFrame.add(topPanel, BorderLayout.NORTH);
         textArea = createTextArea();
 
-        autoCompletionJava = new AutoCompletionJava(new JavaParser(), new CustomCompetitionProvider(), textArea);
+        JavaClassChecker classChecker = new JavaClassChecker();
+        autoCompletionJava = new AutoCompletionJava(new JavaParser(), new CustomCompetitionProvider(), textArea,
+                classChecker, new ExtractorJavaClass(classChecker), new ExtractorDescription());
         autoCompletionJava.start();
         RTextScrollPane sp = new RTextScrollPane(textArea);
         mainFrame.add(sp, BorderLayout.CENTER);
 
         JTextArea consoleArea = new JTextArea();
         consoleArea.setEditable(false);
+        consoleArea.setMargin(new Insets(10, 10, 10, 10));
+        consoleArea.setBackground(Color.decode("#434343"));
         consoleScrollPane = new JScrollPane(consoleArea);
         consoleScrollPane.setPreferredSize(new Dimension(WIDTH, 150));
+        consoleScrollPane.setBorder(BorderFactory.createEmptyBorder());
         mainFrame.add(consoleScrollPane, BorderLayout.SOUTH);
         consoleWindow = new ConsoleWindow(this);
 
@@ -81,8 +101,8 @@ public class MainWindow {
         });
 
         fontSizeSlider.addChangeListener(e -> {
-            textArea.setFont(new Font(FAMILY_FONT, Font.PLAIN, fontSizeSlider.getValue()));
-            consoleArea.setFont(new Font(FAMILY_FONT, Font.PLAIN, fontSizeSlider.getValue()));
+            textArea.setFont(mainFont.deriveFont((float) fontSizeSlider.getValue()));
+            consoleArea.setFont(mainFont.deriveFont((float) fontSizeSlider.getValue()));
         });
         loadAppState();
         mainFrame.addWindowListener(new MainWindowAdapter(this));
@@ -97,8 +117,19 @@ public class MainWindow {
 
     private void addComponentToPanel(JPanel panel, JComponent... buttons) {
         for (JComponent button : buttons) {
+            applyFontComponent(button);
             panel.add(button);
         }
+    }
+
+    private void applyFontComponent(JComponent... components) {
+        for (JComponent component : components) {
+            applyFontComponent(component);
+        }
+    }
+
+    private void applyFontComponent(JComponent component) {
+        component.setFont(mainFont);
     }
 
     private RSyntaxTextArea createTextArea() {
@@ -110,7 +141,9 @@ public class MainWindow {
 
     private void openFile() {
         JFileChooser fileChooser = new JFileChooser();
-        fileChooser.addChoosableFileFilter(new FileNameExtensionFilter("Java File", "java"));
+        fileChooser.setAcceptAllFileFilterUsed(false);
+        fileChooser.resetChoosableFileFilters();
+        fileChooser.setFileFilter(new JavaFileFilter().getFileNameExtensionFilterForJavaFile());
         int result = fileChooser.showOpenDialog(null);
         if (result == JFileChooser.APPROVE_OPTION) {
             File file = fileChooser.getSelectedFile();
@@ -125,7 +158,9 @@ public class MainWindow {
 
     private void saveFile() {
         JFileChooser fileChooser = new JFileChooser();
-        fileChooser.addChoosableFileFilter(new JavaFileFilter());
+        fileChooser.setAcceptAllFileFilterUsed(false);
+        fileChooser.resetChoosableFileFilters();
+        fileChooser.setFileFilter(new JavaFileFilter().getFileNameExtensionFilterForJavaFile());
         fileChooser.setSelectedFile(new File(extractorClassName.extractClassName(textArea.getText()) + ".java"));
         int result = fileChooser.showSaveDialog(null);
         if (result == JFileChooser.APPROVE_OPTION) {
@@ -154,6 +189,7 @@ public class MainWindow {
                 compileProcess.waitFor();
 
                 if (compileProcess.exitValue() == 0) {
+                    consoleArea.setForeground(Color.decode("#F3F3F3"));
                     Process runProcess = Runtime.getRuntime().exec("java " + className);
                     BufferedReader inputReader = new BufferedReader(new InputStreamReader(runProcess.getInputStream()));
                     String line;
@@ -165,6 +201,7 @@ public class MainWindow {
                 } else {
                     BufferedReader errorReader = new BufferedReader(new InputStreamReader(compileProcess.getErrorStream()));
                     String line;
+                    consoleArea.setForeground(Color.decode("#FF0000"));
                     while ((line = errorReader.readLine()) != null) {
                         consoleArea.append(line + "\n");
                     }

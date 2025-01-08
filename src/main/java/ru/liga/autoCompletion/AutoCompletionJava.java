@@ -3,7 +3,6 @@ package ru.liga.autoCompletion;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParseResult;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
@@ -25,11 +24,19 @@ public class AutoCompletionJava extends Thread {
     private final JavaParser javaParser;
     private final CustomCompetitionProvider provider;
     private final RSyntaxTextArea textArea;
+    private final JavaClassChecker classChecker;
+    private final ExtractorJavaClass extractorJavaClass;
+    private final ExtractorDescription extractorDescription;
 
-    public AutoCompletionJava(JavaParser javaParser, CustomCompetitionProvider provider, RSyntaxTextArea textArea) {
+    public AutoCompletionJava(JavaParser javaParser, CustomCompetitionProvider provider, RSyntaxTextArea textArea,
+                              JavaClassChecker classChecker, ExtractorJavaClass extractorJavaClass,
+                              ExtractorDescription extractorDescription) {
         this.provider = provider;
         this.javaParser = javaParser;
         this.textArea = textArea;
+        this.classChecker = classChecker;
+        this.extractorJavaClass = extractorJavaClass;
+        this.extractorDescription = extractorDescription;
     }
 
     @Override
@@ -37,7 +44,6 @@ public class AutoCompletionJava extends Thread {
         textArea.addCaretListener(e -> updateProvider());
         setupAutoComplete();
     }
-
 
     private void setupAutoComplete() {
         AutoCompletion ac = new AutoCompletion(provider);
@@ -106,83 +112,29 @@ public class AutoCompletionJava extends Thread {
             }
         }
         methodSignature.append(")");
-
-        StringBuilder description = new StringBuilder();
-        description.append("<html><b>Method:</b> ").append(method.getName()).append("<br>");
-        description.append("<b>Returns:</b> ").append(method.getReturnType().getSimpleName()).append("<br>");
-        if (method.getParameterCount() > 0) {
-            description.append("<b>Parameters:</b><ul>");
-            for (Class<?> param : params) {
-                description.append("<li>").append(param.getSimpleName()).append("</li>");
-            }
-            description.append("</ul>");
-        } else {
-            description.append("<b>Parameters:</b> None");
-        }
-        description.append("</html>");
-
         FunctionCompletion completion = new FunctionCompletion(provider, methodSignature.toString(), method.getReturnType().getSimpleName());
-        completion.setShortDescription(description.toString());
+        completion.setShortDescription(extractorDescription.getMethodDescription(method));
         provider.addCompletion(completion);
 
     }
 
     private void addFieldCompletionsWithDescriptions(Field field) {
         VariableCompletion completion = new VariableCompletion(provider, field.getName(), field.getType().getSimpleName());
-        String description = "<html><b>Field:</b> " + field.getName() + "<br>" +
-                "<b>Type:</b> " + field.getType().getSimpleName() + "</html>";
-
-        completion.setShortDescription(description);
+        completion.setShortDescription(extractorDescription.getFieldDescription(field));
         provider.addCompletion(completion);
     }
 
-    private boolean isClassName(String context, CompilationUnit cu) {
-        return isImportJavaClassName(context, cu)
-                || isJavaLangClass(context);
-    }
-
-    private boolean isImportJavaClassName(String context, CompilationUnit cu) {
-        return cu.findAll(ImportDeclaration.class).stream()
-                .anyMatch(importDecl -> importDecl.getNameAsString().endsWith("." + context));
-    }
-
-    private String getImportJavaClassName(String context, CompilationUnit cu) {
-        return cu.findAll(ImportDeclaration.class).stream()
-                .filter(importDecl -> importDecl.getNameAsString().endsWith("." + context))
-                .findFirst()
-                .orElseThrow(ClassCastException::new).getNameAsString();
-    }
-
-    private boolean isJavaLangClass(String context) {
-        try {
-            Class.forName("java.lang." + context);
-            return true;
-        } catch (ClassNotFoundException e) {
-            return false;
-        }
-    }
-
     private void updateCompletionsForContext(String context, String fullText) {
-
         provider.clear();
         ParseResult<CompilationUnit> parseResult = javaParser.parse(fullText);
-        CompilationUnit cu = parseResult.getResult().get();
+        CompilationUnit cu = parseResult.getResult().orElseThrow(NullPointerException::new);
         System.out.println(context);
         Map<String, ClassOrInterfaceDeclaration> userDefinedClasses = new HashMap<>();
         cu.findAll(ClassOrInterfaceDeclaration.class)
                 .forEach(cls -> userDefinedClasses.put(cls.getNameAsString(), cls));
-
-        if (isClassName(context, cu)) {
+        if (classChecker.isClassName(context, cu)) {
             try {
-                Class<?> cls = Class.class;
-                if (isJavaLangClass(context)) {
-                    cls = Class.forName("java.lang." + context);
-                } else if (isImportJavaClassName(context, cu)) {
-                    cls = Class.forName(getImportJavaClassName(context, cu));
-                } else {
-                    throw new ClassNotFoundException();
-                }
-                addStaticCompletions(cls);
+                addStaticCompletions(extractorJavaClass.getJavaClass(context, cu));
             } catch (ClassNotFoundException e) {
                 System.err.println("Класс не найден для статических подсказок: " + context);
             }
@@ -196,15 +148,7 @@ public class AutoCompletionJava extends Thread {
                             addUserDefinedClassCompletions(userDefinedClasses.get(typeName));
                         } else {
                             try {
-                                Class<?> cls = Class.class;
-                                if (isJavaLangClass(typeName)) {
-                                    cls = Class.forName("java.lang." + typeName);
-                                } else if (isImportJavaClassName(typeName, cu)) {
-                                    cls = Class.forName(getImportJavaClassName(typeName, cu));
-                                } else {
-                                    throw new ClassNotFoundException();
-                                }
-                                addClassCompletions(cls);
+                                addClassCompletions(extractorJavaClass.getJavaClass(typeName, cu));
                             } catch (ClassNotFoundException e) {
                                 System.err.println("Класс не найден для контекста: " + typeName);
                             }

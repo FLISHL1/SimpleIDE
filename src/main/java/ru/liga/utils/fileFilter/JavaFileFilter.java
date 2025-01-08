@@ -1,20 +1,15 @@
 package ru.liga.utils.fileFilter;
 
-import javax.swing.filechooser.FileFilter;
-import java.io.File;
+import javax.swing.filechooser.FileNameExtensionFilter;
 
-public class JavaFileFilter extends FileFilter {
-    @Override
-    public boolean accept(File f) {
-        if (f.isDirectory()) {
-            return false;
-        }
-        String s = f.getName().toLowerCase();
-        return s.endsWith(".java");
+public class JavaFileFilter {
+    private final FileNameExtensionFilter fileNameExtensionFilterForJavaFile;
+
+    public JavaFileFilter() {
+        fileNameExtensionFilterForJavaFile = new FileNameExtensionFilter("Java File", "java");
     }
 
-    @Override
-    public String getDescription() {
-        return "*.java";
+    public FileNameExtensionFilter getFileNameExtensionFilterForJavaFile() {
+        return fileNameExtensionFilterForJavaFile;
     }
 }

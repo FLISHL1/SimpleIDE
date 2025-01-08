@@ -2,6 +2,7 @@ package ru.liga;
 
 import ru.liga.utils.AutoSaverLastOpenFileUtil;
 import ru.liga.utils.ExtractorPublicClassName;
+import ru.liga.utils.RunnerJavaFile;
 import ru.liga.utils.StateManager;
 import ru.liga.views.MainWindow;
 

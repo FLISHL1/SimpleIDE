@@ -11,6 +11,7 @@ import ru.liga.autoCompletion.JavaClassChecker;
 import ru.liga.autoCompletion.competitonProvider.CustomCompetitionProvider;
 import ru.liga.utils.AutoSaverLastOpenFileUtil;
 import ru.liga.utils.ExtractorPublicClassName;
+import ru.liga.utils.RunnerJavaFile;
 import ru.liga.utils.StateManager;
 import ru.liga.utils.fileFilter.JavaFileFilter;
 
@@ -95,7 +96,8 @@ public class MainWindow {
         newButton.addActionListener(e -> clearTextArea());
         openButton.addActionListener(e -> openFile());
         saveButton.addActionListener(e -> saveFile());
-        runButton.addActionListener(e -> runJavaFile());
+        RunnerJavaFile runnerJavaFile = new RunnerJavaFile(consoleScrollPane, extractorClassName, textArea);
+        runButton.addActionListener(e -> runnerJavaFile.runWithSingleThread());
         consoleButton.addActionListener(e -> {
             consoleWindow.show(consoleScrollPane);
         });
@@ -173,50 +175,7 @@ public class MainWindow {
         }
     }
 
-    private void runJavaFile() {
-        JTextArea consoleArea = (JTextArea) consoleScrollPane.getViewport().getView();
-        try {
-            consoleArea.setText("");
-            String code = textArea.getText();
-            String className = extractorClassName.extractClassName(code);
 
-            if (className != null) {
-                File tempFile = new File(className + ".java");
-                try (BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))) {
-                    textArea.write(writer);
-                }
-                Process compileProcess = Runtime.getRuntime().exec("javac " + tempFile.getAbsolutePath());
-                compileProcess.waitFor();
-
-                if (compileProcess.exitValue() == 0) {
-                    consoleArea.setForeground(Color.decode("#F3F3F3"));
-                    Process runProcess = Runtime.getRuntime().exec("java " + className);
-                    BufferedReader inputReader = new BufferedReader(new InputStreamReader(runProcess.getInputStream()));
-                    String line;
-                    while ((line = inputReader.readLine()) != null) {
-                        consoleArea.append(line + "\n");
-                    }
-                    inputReader.close();
-                    runProcess.waitFor();
-                } else {
-                    BufferedReader errorReader = new BufferedReader(new InputStreamReader(compileProcess.getErrorStream()));
-                    String line;
-                    consoleArea.setForeground(Color.decode("#FF0000"));
-                    while ((line = errorReader.readLine()) != null) {
-                        consoleArea.append(line + "\n");
-                    }
-                    errorReader.close();
-                    consoleArea.append("Compilation failed.\n");
-                }
-
-            } else {
-                consoleArea.append("No public class found.\n");
-            }
-
-        } catch (Exception e) {
-            consoleArea.append("Error: " + e.getMessage() + "\n");
-        }
-    }
 
     public void toggleConsoleWithWindowText() {
         if (consoleWindow.isOpen()) {

@@ -69,6 +69,12 @@ public class RunnerJavaFile implements Runnable {
                         consoleArea.append(line + "\n");
                     }
                     inputReader.close();
+                    BufferedReader errorReader = new BufferedReader(new InputStreamReader(currentProcess.getErrorStream()));
+                    consoleArea.setForeground(Color.decode("#FF0000"));
+                    while ((line = errorReader.readLine()) != null) {
+                        consoleArea.append(line + "\n");
+                    }
+                    errorReader.close();
                     currentProcess.waitFor();
                 } else {
                     BufferedReader errorReader = new BufferedReader(new InputStreamReader(currentProcess.getErrorStream()));
